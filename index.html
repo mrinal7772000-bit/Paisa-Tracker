@@ -1,2 +1,217 @@
 # Paisatrack
 Paisatrack - personal and group Travel expenses tracker
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaisaTrack</title>
+<style>
+:root{--bg:#10151f;--card:#1b2432;--green:#36d399;--text:#f4f7fb;--muted:#a6b2c4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px Arial,sans-serif}
+header{padding:24px 18px;background:#18271f;border-bottom:1px solid #33483c}
+h1{margin:0;color:var(--green);font-size:28px}
+header p{color:var(--muted);margin-bottom:0}
+main{max-width:760px;margin:auto;padding:16px}
+nav{display:flex;gap:8px;overflow:auto;margin-bottom:18px}
+button{background:var(--green);color:#102018;border:0;border-radius:9px;padding:12px;font-weight:bold;cursor:pointer}
+nav button{white-space:nowrap;background:var(--card);color:var(--text)}
+nav button.active{background:var(--green);color:#102018}
+.card{background:var(--card);padding:17px;border-radius:15px;margin-bottom:16px}
+h2{font-size:19px;margin-top:0}
+label{display:block;color:var(--muted);font-size:13px;margin:12px 0 6px}
+input,select{width:100%;padding:12px;border:1px solid #435065;border-radius:8px;background:#111925;color:white;font-size:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{font-size:23px;font-weight:bold;color:var(--green);overflow-wrap:anywhere}
+small,.muted{color:var(--muted)}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #354052}
+.row:last-child{border:0}
+.full{width:100%;margin-top:14px}
+.danger{background:#62343a;color:white}
+.hidden{display:none}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+<h1>₹ PaisaTrack</h1>
+<p>Your money, your trips, under control.</p>
+</header>
+<main>
+<nav>
+<button class="active" data-tab="home">Dashboard</button>
+<button data-tab="personal">Expenses</button>
+<button data-tab="trips">Trips</button>
+<button data-tab="settle">Settle up</button>
+</nav>
+
+<section id="home">
+<div class="card">
+<h2>Your overview</h2>
+<div class="grid">
+<div><small>Personal spending</small><div class="stat" id="total">₹0</div></div>
+<div><small>Trip spending</small><div class="stat" id="tripTotal">₹0</div></div>
+</div>
+<p class="muted">Your records stay on this device.</p>
+</div>
+<div class="card"><h2>Recent expenses</h2><div id="recent">No expenses yet.</div></div>
+</section>
+
+<section id="personal" class="hidden">
+<div class="card">
+<h2>Add personal expense</h2>
+<form id="personalForm">
+<label>Description</label><input id="pdesc" required placeholder="e.g. Lunch">
+<label>Amount (₹)</label><input id="pamount" type="number" min="0.01" step="0.01" required>
+<label>Category</label>
+<select id="pcat">
+<option>Food</option><option>Hotel</option><option>Transport</option>
+<option>Fuel</option><option>Shopping</option><option>Activities</option><option>Other</option>
+</select>
+<button class="full">Save expense</button>
+</form>
+</div>
+<div class="card"><h2>All personal expenses</h2><div id="plist"></div></div>
+</section>
+
+<section id="trips" class="hidden">
+<div class="card">
+<h2>Create a trip</h2>
+<form id="tripForm">
+<label>Trip name</label><input id="tname" required placeholder="e.g. Goa Holiday">
+<label>Location where payments are made</label><input id="tlocation" required placeholder="e.g. Goa, India">
+<label>Members (comma-separated names)</label><input id="tmembers" required placeholder="Amit, Priya, Rahul">
+<button class="full">Create trip</button>
+</form>
+</div>
+<div class="card">
+<h2>Your trips</h2>
+<label>Select trip</label><select id="tripSelect"></select>
+<div id="tripInfo"></div>
+</div>
+<div class="card">
+<h2>Record a trip expense</h2>
+<form id="expenseForm">
+<label>Description</label><input id="edesc" required placeholder="e.g. Hotel bill">
+<label>Amount (₹)</label><input id="eamount" type="number" min="0.01" step="0.01" required>
+<label>Category</label>
+<select id="ecat">
+<option>Food</option><option>Hotel</option><option>Transport</option>
+<option>Fuel</option><option>Shopping</option><option>Activities</option><option>Other</option>
+</select>
+<label>Paid by</label><select id="epayer" required></select>
+<label>Shared equally among</label><div id="shares"></div>
+<button class="full">Save trip expense</button>
+</form>
+</div>
+<div class="card"><h2>Trip expenses</h2><div id="elist"></div>
+<button id="share" class="full">Share trip summary</button>
+</div>
+</section>
+
+<section id="settle" class="hidden">
+<div class="card"><h2>Settlement plan</h2>
+<p class="muted">Choose a trip in the Trips tab. Settlements use recorded payments and equal sharing among the members selected for each expense.</p>
+<div id="settlement">No trip selected.</div>
+</div>
+</section>
+<footer>PaisaTrack • Simple spending, smarter trips</footer>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const money=n=>'₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
+let data;
+try{data=JSON.parse(localStorage.getItem('paisaData'))||{personal:[],trips:[]}}
+catch(e){data={personal:[],trips:[]}}
+let selected=0;
+
+function save(){localStorage.setItem('paisaData',JSON.stringify(data));render()}
+function trip(){return data.trips[selected]}
+function sum(arr){return arr.reduce((s,x)=>s+Number(x.amount),0)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
+ document.querySelectorAll('main section').forEach(s=>s.classList.toggle('hidden',s.id!==b.dataset.tab));
+ render();
+});
+
+$('personalForm').onsubmit=e=>{
+ e.preventDefault();
+ data.personal.unshift({desc:$('pdesc').value,amount:+$('pamount').value,cat:$('pcat').value,date:new Date().toLocaleDateString()});
+ e.target.reset();save();
+};
+
+$('tripForm').onsubmit=e=>{
+ e.preventDefault();
+ const members=[...new Set($('tmembers').value.split(',').map(x=>x.trim()).filter(Boolean))];
+ if(!members.length)return;
+ data.trips.push({name:$('tname').value,location:$('tlocation').value,members,expenses:[]});
+ selected=data.trips.length-1;e.target.reset();save();
+};
+
+$('tripSelect').onchange=()=>{selected=+$('tripSelect').value;render()};
+$('expenseForm').onsubmit=e=>{
+ e.preventDefault();const t=trip();if(!t)return;
+ const included=[...document.querySelectorAll('[name="member"]:checked')].map(x=>x.value);
+ if(!included.length){alert('Select at least one member.');return}
+ t.expenses.push({desc:$('edesc').value,amount:+$('eamount').value,cat:$('ecat').value,payer:$('epayer').value,shares:included,date:new Date().toLocaleDateString()});
+ e.target.reset();render();
+};
+
+function render(){
+ $('total').textContent=money(sum(data.personal));
+ $('tripTotal').textContent=money(data.trips.reduce((s,t)=>s+sum(t.expenses),0));
+ const all=[...data.personal.map(x=>({...x,kind:'Personal'})),...data.trips.flatMap(t=>t.expenses.map(x=>({...x,kind:t.name})))].slice(-5).reverse();
+ $('recent').innerHTML=all.length?all.map(x=>`<div class="row"><span>${esc(x.desc)}<br><small>${esc(x.kind)} · ${esc(x.cat)}</small></span><b>${money(x.amount)}</b></div>`).join(''):'No expenses yet.';
+ $('plist').innerHTML=data.personal.length?data.personal.map(x=>`<div class="row"><span>${esc(x.desc)}<br><small>${esc(x.cat)} · ${x.date}</small></span><b>${money(x.amount)}</b></div>`).join(''):'No personal expenses yet.';
+ $('tripSelect').innerHTML=data.trips.map((t,i)=>`<option value="${i}" ${i===selected?'selected':''}>${esc(t.name)}</option>`).join('');
+ if(!trip()){
+  $('tripInfo').textContent='Create a trip to begin.';
+  $('epayer').innerHTML='';$('shares').innerHTML='';$('elist').textContent='No trip selected.';
+  $('settlement').textContent='No trip selected.';return;
+ }
+ const t=trip();
+ $('tripInfo').innerHTML=`<p><b>${esc(t.name)}</b><br>${esc(t.location)}<br><small>Members: ${t.members.map(esc).join(', ')}</small></p><b>Total: ${money(sum(t.expenses))}</b>`;
+ $('epayer').innerHTML=t.members.map(m=>`<option>${esc(m)}</option>`).join('');
+ $('shares').innerHTML=t.members.map(m=>`<label><input style="width:auto" type="checkbox" name="member" value="${esc(m)}" checked> ${esc(m)}</label>`).join('');
+ $('elist').innerHTML=t.expenses.length?t.expenses.map(x=>`<div class="row"><span>${esc(x.desc)}<br><small>${esc(x.cat)} · Paid by ${esc(x.payer)} · Shared: ${x.shares.map(esc).join(', ')}</small></span><b>${money(x.amount)}</b></div>`).join(''):'No trip expenses yet.';
+ settlement(t);
+}
+
+function settlement(t){
+ const balance=Object.fromEntries(t.members.map(m=>[m,0]));
+ t.expenses.forEach(x=>{
+  if(!(x.payer in balance))return;
+  balance[x.payer]+=Number(x.amount);
+  const each=Number(x.amount)/x.shares.length;
+  x.shares.forEach(m=>{if(m in balance)balance[m]-=each});
+ });
+ let creditors=Object.entries(balance).filter(x=>x[1]>.005).map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount);
+ let debtors=Object.entries(balance).filter(x=>x[1]<-.005).map(([name,amount])=>({name,amount:-amount})).sort((a,b)=>b.amount-a.amount);
+ const payments=[];
+ while(debtors.length&&creditors.length){
+  const d=debtors[0],c=creditors[0],a=Math.min(d.amount,c.amount);
+  payments.push({from:d.name,to:c.name,amount:a});
+  d.amount-=a;c.amount-=a;
+  if(d.amount<.005)debtors.shift();
+  if(c.amount<.005)creditors.shift();
+ }
+ $('settlement').innerHTML=payments.length?payments.map(p=>`<div class="row"><span>${esc(p.from)} pays ${esc(p.to)}</span><b>${money(p.amount)}</b></div>`).join(''):'Everyone is settled, or no expenses have been recorded.';
+}
+
+$('share').onclick=async()=>{
+ const t=trip();if(!t)return;
+ const text=`PaisaTrack trip: ${t.name}\nLocation: ${t.location}\nMembers: ${t.members.join(', ')}\nTotal expenses: ${money(sum(t.expenses))}\n\nExpenses:\n`+t.expenses.map(x=>`${x.desc}: ${money(x.amount)} (${x.cat}), paid by ${x.payer}`).join('\n');
+ if(navigator.share){try{await navigator.share({title:t.name,text})}catch(e){}}
+ else if(navigator.clipboard){try{await navigator.clipboard.writeText(text);alert('Trip summary copied.')}catch(e){prompt('Copy this trip summary:',text)}}
+ else prompt('Copy this trip summary:',text);
+};
+render();
+</script>
+</body>
+  </html>
+  
